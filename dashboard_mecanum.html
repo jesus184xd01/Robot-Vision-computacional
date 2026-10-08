@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robot Mecanum</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{
+  --bg:#080c14;--bg2:#0d1420;--bg3:#111827;
+  --border:#1e2d40;--border2:#243347;
+  --text:#e2e8f0;--text2:#64748b;--text3:#334155;
+  --blue:#3b82f6;--blue-g:#0ea5e9;--cyan:#06b6d4;
+  --teal:#14b8a6;--purple:#8b5cf6;--orange:#f59e0b;
+  --red:#ef4444;--red-d:#991b1b;--green:#10b981;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;padding:10px;gap:8px;overflow:hidden}
+
+/* HEADER */
+header{display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px 14px;gap:12px;flex-shrink:0}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--blue),var(--cyan));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.logo-text{font-size:14px;font-weight:600}
+.logo-sub{font-size:10px;color:var(--text2)}
+.conn-area{display:flex;align-items:center;gap:8px}
+.conn-indicator{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:5px 10px}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:var(--red);transition:background .3s;flex-shrink:0}
+.conn-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.ip-input{background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--text);padding:5px 10px;font-size:12px;width:140px;font-family:'JetBrains Mono',monospace;outline:none}
+.ip-input:focus{border-color:var(--blue)}
+.conn-btn{background:linear-gradient(135deg,var(--blue),var(--blue-g));border:none;border-radius:7px;color:#fff;padding:6px 14px;font-size:12px;font-weight:500;cursor:pointer}
+.conn-btn:hover{opacity:.85}
+
+/* MAIN */
+.main{flex:1;display:grid;grid-template-columns:180px 1fr 200px;gap:8px;min-height:0}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.card-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;flex-shrink:0}
+
+/* COL IZQUIERDA */
+.col-left{display:flex;flex-direction:column;gap:8px;min-height:0}
+
+.badge{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:7px;font-size:11px;font-weight:500;width:100%}
+.badge.ok   {background:#052e16;color:#4ade80;border:1px solid #166534}
+.badge.mov  {background:#1c1003;color:var(--orange);border:1px solid #92400e}
+.badge.det  {background:#0c1e3d;color:var(--blue-g);border:1px solid var(--blue)}
+.badge.cerca{background:#2d0a0a;color:#f87171;border:1px solid var(--red-d)}
+.badge.err  {background:#1c0505;color:#f87171;border:1px solid var(--red-d)}
+.bdot{width:7px;height:7px;border-radius:50%;background:currentColor}
+
+/* Toggle modo */
+.modo-row{display:flex;align-items:center;justify-content:space-between}
+.modo-label-text{font-size:11px;color:var(--text2)}
+.toggle-switch{position:relative;width:44px;height:24px;cursor:pointer;flex-shrink:0}
+.toggle-switch input{opacity:0;width:0;height:0}
+.slider-sw{position:absolute;inset:0;background:var(--bg3);border:1px solid var(--border2);border-radius:12px;transition:.3s}
+.slider-sw:before{content:"";position:absolute;width:18px;height:18px;left:2px;top:2px;background:var(--text2);border-radius:50%;transition:.3s}
+input:checked + .slider-sw{background:#1c1003;border-color:var(--orange)}
+input:checked + .slider-sw:before{transform:translateX(20px);background:var(--orange)}
+.modo-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;margin-top:2px;width:100%}
+.modo-badge.auto  {background:#052e16;color:#4ade80;border:1px solid #166534}
+.modo-badge.manual{background:#1c1003;color:var(--orange);border:1px solid #92400e}
+.modo-desc{font-size:9px;color:var(--text3)}
+
+/* Log */
+.log-card{flex:1;min-height:0}
+.log{background:var(--bg3);border-radius:7px;padding:6px;height:calc(100% - 26px);overflow-y:auto;font-family:'JetBrains Mono',monospace}
+.log-line{font-size:9px;padding:2px 0;border-bottom:1px solid var(--bg2);display:flex;gap:5px;color:var(--text3)}
+.log-line .ts{flex-shrink:0}.log-line .msg{flex:1}
+.log-line.cmd  .msg{color:var(--green)}
+.log-line.warn .msg{color:var(--orange)}
+.log-line.err  .msg{color:#f87171}
+.log-line.vis  .msg{color:var(--blue-g)}
+.log-line.cerca .msg{color:var(--red)}
+.log-line.modo .msg{color:var(--purple)}
+
+/* COL CENTRAL — STREAM */
+.col-mid{min-height:0}
+.cam-card{height:100%}
+.cam-frame{width:100%;height:calc(100% - 26px);border-radius:8px;overflow:hidden;background:#000;position:relative;display:flex;align-items:center;justify-content:center}
+.cam-frame img{width:100%;height:100%;object-fit:cover}
+.cam-live{position:absolute;top:8px;left:8px;background:rgba(239,68,68,.85);border-radius:5px;padding:3px 8px;font-size:10px;font-weight:600;color:#fff;display:none}
+.cam-modo{position:absolute;top:8px;right:8px;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:600;display:none}
+.cam-modo.auto  {background:rgba(16,185,129,.85);color:#fff}
+.cam-modo.manual{background:rgba(245,158,11,.85);color:#fff}
+.cam-no-signal{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text3);font-size:12px;width:100%;height:100%}
+.cam-no-signal span{font-size:36px}
+.cam-info{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.7);border-radius:6px;padding:5px 10px;font-size:10px;font-family:'JetBrains Mono',monospace;color:#ccc;display:none}
+.stream-row{display:flex;gap:6px;position:absolute;bottom:8px;right:8px}
+.stream-row input{background:rgba(0,0,0,.7);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:4px 8px;font-size:10px;font-family:'JetBrains Mono',monospace;outline:none;width:160px}
+.stream-btn{background:rgba(20,184,166,.8);border:none;border-radius:6px;color:#fff;padding:4px 10px;font-size:10px;cursor:pointer;white-space:nowrap}
+.stream-btn:hover{background:var(--teal)}
+
+/* COL DERECHA — CONTROLES */
+.col-right{display:flex;flex-direction:column;gap:8px;min-height:0}
+.ctrl-card{flex:1;min-height:0}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;height:calc(60% - 10px)}
+.btn{background:var(--bg3);border:1.5px solid var(--border2);border-radius:9px;color:var(--text);font-size:20px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;user-select:none;touch-action:none;transition:all .1s}
+.btn small{font-size:7px;color:var(--text3);font-weight:500;letter-spacing:.5px}
+.btn:active,.btn.pressed{transform:scale(0.92)}
+.btn.mov {border-color:#1d4ed8;color:var(--blue-g)}
+.btn.mov:active,.btn.mov.pressed{background:#0c1e3d;border-color:var(--blue);box-shadow:0 0 8px rgba(59,130,246,.3)}
+.btn.lat {border-color:#4c1d95;color:var(--purple)}
+.btn.lat:active,.btn.lat.pressed{background:#1a0b38;border-color:var(--purple)}
+.btn.diag{border-color:#0f4f4a;color:var(--teal)}
+.btn.diag:active,.btn.diag.pressed{background:#062623;border-color:var(--teal)}
+.btn.stop-btn{background:linear-gradient(135deg,#3f0000,#7f1d1d);border-color:var(--red);color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;box-shadow:0 0 12px rgba(239,68,68,.2)}
+.btn.stop-btn:active{background:var(--red)}
+.btn.disabled{opacity:.3;pointer-events:none}
+
+/* Giros */
+.giros-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;height:calc(40% - 14px);margin-top:8px}
+.btn-giro{background:var(--bg3);border:1.5px solid var(--orange);border-radius:9px;color:var(--orange);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;user-select:none;touch-action:none;transition:all .1s;font-size:20px}
+.btn-giro small{font-size:8px;color:var(--text2);font-weight:500}
+.btn-giro:active,.btn-giro.pressed{background:#451a03;border-color:#fbbf24;transform:scale(0.92)}
+.btn-giro.disabled{opacity:.3;pointer-events:none}
+
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🚗</div>
+    <div>
+      <div class="logo-text">Robot Mecanum</div>
+      <div class="logo-sub">YOLOv5 + Hailo-8L — MQTT</div>
+    </div>
+  </div>
+  <div class="conn-area">
+    <div class="conn-indicator">
+      <div class="conn-dot" id="connDot"></div>
+      <span id="connText">Desconectado</span>
+    </div>
+    <input class="ip-input" type="text" id="ip" placeholder="IP Raspberry" value="192.168.137.3">
+    <button class="conn-btn" onclick="conectar()">Conectar MQTT</button>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- COL IZQUIERDA -->
+  <div class="col-left">
+    <div class="card" style="flex:0">
+      <div class="card-label">Estado</div>
+      <div class="badge err" id="badge"><span class="bdot"></span>Sin conexión</div>
+    </div>
+
+    <div class="card" style="flex:0">
+      <div class="card-label">Modo de control</div>
+      <div class="modo-row">
+        <span class="modo-label-text">Manual</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="modoSwitch" onchange="toggleModo()">
+          <span class="slider-sw"></span>
+        </label>
+      </div>
+      <div class="modo-badge auto" id="modoBadge">🤖 Automático</div>
+      <div class="modo-desc" id="modoDesc">Siguiendo personas</div>
+    </div>
+
+    <div class="card log-card">
+      <div class="card-label">Log de eventos</div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <!-- COL CENTRAL — STREAM GRANDE -->
+  <div class="col-mid">
+    <div class="card cam-card">
+      <div class="card-label">Vista de cámara — YOLOv5 + Hailo-8L</div>
+      <div class="cam-frame" id="camFrame">
+        <div class="cam-no-signal" id="noSignal">
+          <span>📷</span>
+          <div>Sin señal de cámara</div>
+          <div style="font-size:10px">Conecta el stream MJPEG</div>
+        </div>
+        <img id="camImg" style="display:none" alt="stream">
+        <div class="cam-live" id="camLive">● LIVE</div>
+        <div class="cam-modo auto" id="camModo">🤖 AUTO</div>
+        <div class="cam-info" id="camInfo"></div>
+        <div class="stream-row">
+          <input type="text" id="streamIp" placeholder="IP:8080" value="192.168.137.3:8080">
+          <button class="stream-btn" onclick="conectarStream()">Ver cámara</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COL DERECHA — CONTROLES -->
+  <div class="col-right">
+    <div class="card ctrl-card">
+      <div class="card-label">Control de movimiento</div>
+      <div class="grid3">
+        <div class="btn diag disabled" data-cmd="diag_fi"><span>↖</span><small>DIAG FI</small></div>
+        <div class="btn mov  disabled" data-cmd="adelante"><span>↑</span><small>ADELANTE</small></div>
+        <div class="btn diag disabled" data-cmd="diag_fd"><span>↗</span><small>DIAG FD</small></div>
+        <div class="btn lat  disabled" data-cmd="lateral_izq"><span>←</span><small>LAT IZQ</small></div>
+        <div class="btn stop-btn"      data-cmd="stop">⏹ STOP</div>
+        <div class="btn lat  disabled" data-cmd="lateral_der"><span>→</span><small>LAT DER</small></div>
+        <div class="btn diag disabled" data-cmd="diag_ai"><span>↙</span><small>DIAG AI</small></div>
+        <div class="btn mov  disabled" data-cmd="atras"><span>↓</span><small>ATRÁS</small></div>
+        <div class="btn diag disabled" data-cmd="diag_ad"><span>↘</span><small>DIAG AD</small></div>
+      </div>
+      <div class="giros-grid">
+        <div class="btn-giro disabled" data-cmd="giro_izq"><span>↺</span><small>GIRO IZQ</small></div>
+        <div class="btn-giro disabled" data-cmd="giro_der"><span>↻</span><small>GIRO DER</small></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Auto-detectar IP del servidor
+const serverIP = window.location.hostname;
+if (serverIP && serverIP !== "" && serverIP !== "localhost") {
+  document.getElementById("ip").value = serverIP;
+  document.getElementById("streamIp").value = serverIP + ":8080";
+}
+
+let client     = null;
+let modoManual = false;
+
+const TOPIC_CMD  = "robot/control/comando";
+const TOPIC_EST  = "robot/estado";
+const TOPIC_DET  = "robot/vision/deteccion";
+const TOPIC_MODO = "robot/control/modo";
+
+function log(msg, tipo="info") {
+  const el   = document.getElementById("log");
+  const line = document.createElement("div");
+  line.className = "log-line " + tipo;
+  const t = new Date().toLocaleTimeString();
+  line.innerHTML = `<span class="ts">${t}</span><span class="msg">${msg}</span>`;
+  el.prepend(line);
+  if (el.children.length > 300) el.removeChild(el.lastChild);
+}
+
+function setModo(manual) {
+  modoManual = manual;
+  const sw      = document.getElementById("modoSwitch");
+  const badge   = document.getElementById("modoBadge");
+  const desc    = document.getElementById("modoDesc");
+  const camModo = document.getElementById("camModo");
+
+  sw.checked = manual;
+
+  if (manual) {
+    badge.className   = "modo-badge manual";
+    badge.textContent = "🕹️ Manual";
+    desc.textContent  = "Tú controlas el robot";
+    camModo.className = "cam-modo manual";
+    camModo.textContent = "🕹️ MANUAL";
+    document.querySelectorAll(".btn[data-cmd]:not(.stop-btn), .btn-giro").forEach(b => b.classList.remove("disabled"));
+    log("Modo MANUAL — botones habilitados", "modo");
+  } else {
+    badge.className   = "modo-badge auto";
+    badge.textContent = "🤖 Automático";
+    desc.textContent  = "Siguiendo personas";
+    camModo.className = "cam-modo auto";
+    camModo.textContent = "🤖 AUTO";
+    document.querySelectorAll(".btn[data-cmd]:not(.stop-btn), .btn-giro").forEach(b => b.classList.add("disabled"));
+    log("Modo AUTO — seguimiento activo", "modo");
+  }
+}
+
+function toggleModo() {
+  const sw = document.getElementById("modoSwitch");
+  const nuevoModo = sw.checked ? "manual" : "auto";
+  if (client && client.connected) client.publish(TOPIC_MODO, nuevoModo);
+  setModo(sw.checked);
+}
+
+function conectar() {
+  const ip = document.getElementById("ip").value.trim();
+  if (!ip) { alert("Pon la IP de la Raspberry"); return; }
+  if (client) client.end();
+  client = mqtt.connect("ws://" + ip + ":9001");
+
+  client.on("connect", () => {
+    document.getElementById("connDot").className = "conn-dot ok";
+    document.getElementById("connText").textContent = "Conectado — " + ip;
+    client.subscribe(TOPIC_EST);
+    client.subscribe(TOPIC_DET);
+    client.subscribe(TOPIC_MODO);
+    log("Conectado al broker " + ip, "cmd");
+  });
+  client.on("error", () => {
+    document.getElementById("connDot").className = "conn-dot";
+    document.getElementById("connText").textContent = "Error";
+    log("Error de conexión", "err");
+  });
+  client.on("close", () => {
+    document.getElementById("connDot").className = "conn-dot";
+    document.getElementById("connText").textContent = "Desconectado";
+    log("Desconectado", "err");
+  });
+
+  client.on("message", (topic, payload) => {
+    const msg = payload.toString();
+
+    if (topic === TOPIC_MODO) {
+      setModo(msg === "manual");
+    }
+
+    if (topic === TOPIC_EST) {
+      const badge = document.getElementById("badge");
+      if (msg === "robot_conectado") {
+        badge.className = "badge ok";
+        badge.innerHTML = '<span class="bdot"></span>Robot conectado';
+        log("Robot conectado", "cmd");
+      } else if (msg === "robot_moviendose") {
+        badge.className = "badge mov";
+        badge.innerHTML = '<span class="bdot"></span>En movimiento';
+      } else if (msg === "robot_parado") {
+        badge.className = "badge ok";
+        badge.innerHTML = '<span class="bdot"></span>Robot parado';
+        log("Robot parado", "warn");
+      } else if (msg === "modo_manual") {
+        setModo(true);
+      } else if (msg === "modo_auto") {
+        setModo(false);
+      }
+    }
+
+    if (topic === TOPIC_DET) {
+      try {
+        const d = JSON.parse(msg);
+        // Mostrar detección en log y en overlay de cámara
+        const info = document.getElementById("camInfo");
+        info.style.display = "block";
+        info.textContent = `${d.objeto} ${(d.confianza*100).toFixed(0)}% | cx:${d.centro_x.toFixed(2)} | ${d.comando}`;
+
+        const badge = document.getElementById("badge");
+        if (d.comando === "persona_cerca") {
+          badge.className = "badge cerca";
+          badge.innerHTML = '<span class="bdot"></span>¡Persona muy cerca!';
+          log(`⚠ persona muy cerca — STOP`, "cerca");
+        } else if (d.comando === "persona_frente") {
+          badge.className = "badge mov";
+          badge.innerHTML = '<span class="bdot"></span>Siguiendo persona';
+          log(`👁 persona ${(d.confianza*100).toFixed(0)}% cx:${d.centro_x.toFixed(2)} → ADELANTE`, "vis");
+        } else if (d.comando === "persona_izquierda") {
+          badge.className = "badge det";
+          badge.innerHTML = '<span class="bdot"></span>Girando izquierda';
+          log(`👁 persona ${(d.confianza*100).toFixed(0)}% cx:${d.centro_x.toFixed(2)} → IZQ`, "vis");
+        } else if (d.comando === "persona_derecha") {
+          badge.className = "badge det";
+          badge.innerHTML = '<span class="bdot"></span>Girando derecha';
+          log(`👁 persona ${(d.confianza*100).toFixed(0)}% cx:${d.centro_x.toFixed(2)} → DER`, "vis");
+        }
+      } catch(e) {}
+    }
+  });
+}
+
+function conectarStream() {
+  const ip = document.getElementById("streamIp").value.trim();
+  if (!ip) { alert("Pon la IP:puerto del stream"); return; }
+  const img = document.getElementById("camImg");
+  img.src = `http://${ip}/stream`;
+  img.style.display = "block";
+  document.getElementById("noSignal").style.display = "none";
+  document.getElementById("camLive").style.display  = "block";
+  document.getElementById("camModo").style.display  = "block";
+  img.onerror = () => {
+    img.style.display = "none";
+    document.getElementById("noSignal").style.display = "flex";
+    document.getElementById("camLive").style.display  = "none";
+    document.getElementById("camModo").style.display  = "none";
+    log("Error al conectar stream", "err");
+  };
+  log("Conectando stream: " + ip, "cmd");
+}
+
+function cmd(comando) {
+  if (!client || !client.connected) { log("Sin conexión MQTT", "err"); return; }
+  client.publish(TOPIC_CMD, comando);
+  log("→ " + comando.toUpperCase(), comando === "stop" ? "warn" : "cmd");
+}
+
+document.querySelectorAll(".btn[data-cmd], .btn-giro[data-cmd]").forEach(btn => {
+  const c = btn.getAttribute("data-cmd");
+  btn.addEventListener("click", () => {
+    if (btn.classList.contains("disabled")) return;
+    cmd(c);
+    btn.classList.add("pressed");
+    setTimeout(() => btn.classList.remove("pressed"), 150);
+  });
+  btn.addEventListener("touchstart", e => {
+    if (btn.classList.contains("disabled")) return;
+    e.preventDefault();
+    cmd(c);
+    btn.classList.add("pressed");
+    setTimeout(() => btn.classList.remove("pressed"), 150);
+  }, {passive:false});
+});
+
+const mapa = {
+  ArrowUp:"adelante",  ArrowDown:"atras",
+  a:"lateral_izq",     d:"lateral_der",
+  q:"giro_izq",        e:"giro_der",
+  z:"diag_fi",         x:"diag_fd",
+  c:"diag_ai",         v:"diag_ad",
+  " ":"stop"
+};
+document.addEventListener("keydown", ev => {
+  if (!ev.repeat && mapa[ev.key]) {
+    if (ev.key === " " || modoManual) cmd(mapa[ev.key]);
+  }
+});
+</script>
+</body>
+</html>

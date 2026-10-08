@@ -1,0 +1,19 @@
+nano ~/Downloads/hailo-rpi5-examples/venv_hailo_rpi_examples/lib/python3.11/site-packages/hailo_apps/hailo_app_python/core/gstreamer/gstreamer_helper_pipelines.py
+
+# Cambia esto (3 veces):
+'videoflip name=videoflip video-direction=horiz ! '
+
+# Por esto:
+'videoflip name=videoflip video-direction=identity ! '
+
+# Vuelve a esto (sin inversión):
+if bbox_h > DISTANCIA_CERCA:
+    cmd = "persona_cerca"
+elif zona == "izq":
+    cmd = "persona_izquierda"
+elif zona == "der":
+    cmd = "persona_derecha"
+else:
+    cmd = "persona_frente"
+
+nano ~/Downloads/hailo-rpi5-examples/venv_hailo_rpi_examples/lib/python3.11/site-packages/hailo_apps/hailo_app_python/core/common/defines.py
